@@ -16,11 +16,5 @@
     "description": "Warm and sweet",
     "price": "$48",
     "image": "candle3.jpg"
-  },
-  {
-    "name": "test",
-    "description": "test",
-    "price": "1",
-    "image": "test.png"
   }
 ]
