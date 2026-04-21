@@ -196,10 +196,17 @@ productList.addEventListener('change', event => {
 
   products[index].imageFile = file;
   products[index].image = `images/${file.name}`;
+  
   const imageInput = row.querySelector('input[data-field="image"]');
-  if (imageInput) imageInput.value = products[index].image;
+  if (imageInput) {
+    imageInput.value = products[index].image;
+    imageInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  
   const fileLabel = row.querySelector('.current-file');
   if (fileLabel) fileLabel.textContent = `Selected: ${file.name}`;
+  
+  syncFromFields();
   updateJsonArea();
 });
 
