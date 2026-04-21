@@ -7,9 +7,9 @@ This site now loads product data from `products.json` and renders the product ca
 - Open `admin.html` in your browser.
 - Log in using the default admin password: `LuxeFlame123`
 - Edit product fields or add/remove products.
-- Click `Download products.json` after making updates.
-- Replace the `products.json` file in the repository with the downloaded file.
-- Commit and push changes to GitHub.
+- You can either download the updated JSON and replace `products.json` manually,
+- or enter GitHub repo details and a personal access token to save it directly from the editor.
+- Commit and push changes to GitHub if you save manually.
 
 ## Deploy
 

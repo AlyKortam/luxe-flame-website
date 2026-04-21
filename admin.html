@@ -35,7 +35,7 @@ textarea#productJson { min-height: 220px; font-family: monospace; white-space: p
     <div class="container">
         <div class="card">
             <h1>Luxe Flame Admin</h1>
-            <p>Use this panel to edit the product catalog. After changes, download the updated JSON and replace <code>products.json</code> in the repo.</p>
+            <p>Use this panel to edit the product catalog. You can save changes directly to GitHub if you provide a valid personal access token.</p>
             <div id="loginSection">
                 <label for="adminPassword">Admin password</label>
                 <input id="adminPassword" type="password" placeholder="Enter admin password" autocomplete="off">
@@ -44,16 +44,28 @@ textarea#productJson { min-height: 220px; font-family: monospace; white-space: p
                 <p id="loginMessage"></p>
             </div>
             <div id="adminSection" class="hidden">
-                <div class="notice">This is a static editor. After editing products, click Download and commit the new <code>products.json</code> to GitHub.</div>
+                <div class="notice">This is a static editor. You can also save updates directly to GitHub if you enter a valid token.</div>
                 <div id="productList"></div>
                 <button id="addProduct">Add New Product</button>
                 <div class="product-actions">
                     <button id="refreshJson">Refresh JSON</button>
                     <button id="downloadJson">Download products.json</button>
                 </div>
+                <div class="product-actions" style="flex-direction:column;align-items:flex-start;">
+                    <label for="githubOwner">GitHub owner/user</label>
+                    <input id="githubOwner" placeholder="AlyKortam" value="AlyKortam">
+                    <label for="githubRepo">Repository name</label>
+                    <input id="githubRepo" placeholder="luxe-flame-website" value="luxe-flame-website">
+                    <label for="githubBranch">Branch</label>
+                    <input id="githubBranch" placeholder="main" value="main">
+                    <label for="githubToken">GitHub token</label>
+                    <input id="githubToken" type="password" placeholder="Personal access token">
+                    <button id="saveGithub">Save to GitHub</button>
+                    <p id="saveStatus" style="margin-top:10px;color:#555;"></p>
+                </div>
                 <label for="productJson">Product data preview</label>
                 <textarea id="productJson"></textarea>
-                <p class="notice">To publish changes, replace the file in your repository with the downloaded JSON and push to GitHub Pages.</p>
+                <p class="notice">To publish changes without GitHub save, replace the file in your repository with the downloaded JSON and push to GitHub Pages. With a GitHub token, you can save directly from this page instead.</p>
             </div>
         </div>
     </div>
@@ -185,6 +197,73 @@ downloadJson.addEventListener('click', () => {
   syncFromFields();
   download('products.json', productJson.value);
 });
+
+function utf8ToBase64(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+async function saveProductsToGithub() {
+  syncFromFields();
+  const owner = document.getElementById('githubOwner').value.trim();
+  const repo = document.getElementById('githubRepo').value.trim();
+  const branch = document.getElementById('githubBranch').value.trim() || 'main';
+  const token = document.getElementById('githubToken').value.trim();
+  const status = document.getElementById('saveStatus');
+
+  if (!owner || !repo || !token) {
+    status.textContent = 'Enter owner, repo, and a GitHub token to save.';
+    status.style.color = '#b43131';
+    return;
+  }
+  status.textContent = 'Saving to GitHub...';
+  status.style.color = '#333';
+
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/products.json?ref=${branch}`;
+
+  try {
+    const metadataResp = await fetch(apiUrl, {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json'
+      }
+    });
+    if (!metadataResp.ok) {
+      const errorData = await metadataResp.json();
+      throw new Error(errorData.message || 'Unable to read products.json from repo.');
+    }
+    const metadata = await metadataResp.json();
+    const sha = metadata.sha;
+    const content = utf8ToBase64(JSON.stringify(products, null, 2));
+
+    const updateResp = await fetch(apiUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: 'Update products.json via admin editor',
+        content,
+        sha,
+        branch
+      })
+    });
+
+    if (!updateResp.ok) {
+      const errorData = await updateResp.json();
+      throw new Error(errorData.message || 'GitHub save failed');
+    }
+
+    status.textContent = 'Saved successfully! Refresh GitHub Pages after a moment.';
+    status.style.color = '#2c6e49';
+  } catch (error) {
+    status.textContent = `Save failed: ${error.message}`;
+    status.style.color = '#b43131';
+  }
+}
+
+document.getElementById('saveGithub').addEventListener('click', saveProductsToGithub);
 </script>
 </body>
 </html>
