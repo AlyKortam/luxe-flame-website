@@ -27,6 +27,7 @@ button:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(255,145
 .product-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
 .product-actions button { background: #ff914d; }
 textarea#productJson { min-height: 220px; font-family: monospace; white-space: pre-wrap; }
+.current-file { font-size: 0.95rem; color: #7d7d7d; margin-top: 6px; }
 .notice { background:#fff5e9; border-left:4px solid #ff914d; padding:14px 18px; margin:18px 0; border-radius:12px; color:#6b4a2b; }
 </style>
 </head>
@@ -108,8 +109,13 @@ function renderProductRows() {
         <input data-field="description" value="${item.description || ''}" placeholder="Short description">
       </div>
       <div>
-        <label>Image filename</label>
-        <input data-field="image" value="${item.image || ''}" placeholder="candle.jpg">
+        <label>Image URL / filename</label>
+        <input data-field="image" value="${item.image || ''}" placeholder="images/candle.jpg">
+      </div>
+      <div>
+        <label>Upload image</label>
+        <input type="file" data-field="imageFile" accept="image/*">
+        <div class="current-file">Current: ${item.image || 'none'}</div>
       </div>
       <div class="product-actions">
         <button type="button" data-action="delete" data-index="${index}">Delete</button>
@@ -120,12 +126,13 @@ function renderProductRows() {
 
 function syncFromFields() {
   const rows = document.querySelectorAll('.product-row');
-  products = Array.from(rows).map(row => {
+  products = Array.from(rows).map((row, index) => {
     const name = row.querySelector('input[data-field="name"]').value.trim();
     const description = row.querySelector('input[data-field="description"]').value.trim();
     const price = row.querySelector('input[data-field="price"]').value.trim();
     const image = row.querySelector('input[data-field="image"]').value.trim();
-    return { name, description, price, image };
+    const existing = products[index] || {};
+    return { name, description, price, image, imageFile: existing.imageFile };
   }).filter(item => item.name && item.image);
   updateJsonArea();
 }
@@ -179,6 +186,23 @@ productList.addEventListener('input', () => {
   syncFromFields();
 });
 
+productList.addEventListener('change', event => {
+  const input = event.target.closest('input[data-field="imageFile"]');
+  if (!input) return;
+  const row = input.closest('.product-row');
+  const index = Number(row.dataset.index);
+  const file = input.files[0];
+  if (!file) return;
+
+  products[index].imageFile = file;
+  products[index].image = `images/${file.name}`;
+  const imageInput = row.querySelector('input[data-field="image"]');
+  if (imageInput) imageInput.value = products[index].image;
+  const fileLabel = row.querySelector('.current-file');
+  if (fileLabel) fileLabel.textContent = `Selected: ${file.name}`;
+  updateJsonArea();
+});
+
 productList.addEventListener('click', event => {
   const button = event.target.closest('button[data-action="delete"]');
   if (!button) return;
@@ -202,6 +226,55 @@ function utf8ToBase64(str) {
   return btoa(unescape(encodeURIComponent(str)));
 }
 
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function getFileSha(owner, repo, path, token, branch) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`;
+  const resp = await fetch(url, {
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json'
+    }
+  });
+  if (resp.status === 404) return null;
+  if (!resp.ok) {
+    const errorData = await resp.json();
+    throw new Error(errorData.message || 'Unable to check file sha');
+  }
+  const data = await resp.json();
+  return data.sha;
+}
+
+async function uploadFileToGithub(owner, repo, path, contentBase64, token, branch, message, sha = null) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
+  const body = { message, content: contentBase64, branch };
+  if (sha) body.sha = sha;
+  const resp = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!resp.ok) {
+    const errorData = await resp.json();
+    throw new Error(errorData.message || 'Upload failed');
+  }
+  return resp.json();
+}
+
 async function saveProductsToGithub() {
   syncFromFields();
   const owner = document.getElementById('githubOwner').value.trim();
@@ -215,45 +288,23 @@ async function saveProductsToGithub() {
     status.style.color = '#b43131';
     return;
   }
-  status.textContent = 'Saving to GitHub...';
+  status.textContent = 'Saving images and products to GitHub...';
   status.style.color = '#333';
 
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/products.json?ref=${branch}`;
-
   try {
-    const metadataResp = await fetch(apiUrl, {
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: 'application/vnd.github+json'
+    for (const item of products) {
+      if (item.imageFile) {
+        const path = item.image;
+        const sha = await getFileSha(owner, repo, path, token, branch);
+        const contentBase64 = await fileToBase64(item.imageFile);
+        await uploadFileToGithub(owner, repo, path, contentBase64, token, branch, `Upload product image ${path}`, sha);
       }
-    });
-    if (!metadataResp.ok) {
-      const errorData = await metadataResp.json();
-      throw new Error(errorData.message || 'Unable to read products.json from repo.');
     }
-    const metadata = await metadataResp.json();
-    const sha = metadata.sha;
-    const content = utf8ToBase64(JSON.stringify(products, null, 2));
 
-    const updateResp = await fetch(apiUrl, {
-      method: 'PUT',
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: 'application/vnd.github+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message: 'Update products.json via admin editor',
-        content,
-        sha,
-        branch
-      })
-    });
-
-    if (!updateResp.ok) {
-      const errorData = await updateResp.json();
-      throw new Error(errorData.message || 'GitHub save failed');
-    }
+    const productsToSave = products.map(({ imageFile, ...rest }) => rest);
+    const productsSha = await getFileSha(owner, repo, 'products.json', token, branch);
+    const productsContent = utf8ToBase64(JSON.stringify(productsToSave, null, 2));
+    await uploadFileToGithub(owner, repo, 'products.json', productsContent, token, branch, 'Update products.json via admin editor', productsSha);
 
     status.textContent = 'Saved successfully! Refresh GitHub Pages after a moment.';
     status.style.color = '#2c6e49';

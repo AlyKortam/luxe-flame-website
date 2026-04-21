@@ -9,6 +9,7 @@ This site now loads product data from `products.json` and renders the product ca
 - Edit product fields or add/remove products.
 - You can either download the updated JSON and replace `products.json` manually,
 - or enter GitHub repo details and a personal access token to save it directly from the editor.
+- Image uploads are supported: select a new image file and it will be uploaded into `images/` in the repo.
 - Commit and push changes to GitHub if you save manually.
 
 ## Deploy
