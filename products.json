@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Lavender Dreams",
+    "description": "Relaxing lavender aroma",
+    "price": "$45",
+    "image": "candle.jpg"
+  },
+  {
+    "name": "Citrus Burst",
+    "description": "Fresh energizing scent",
+    "price": "$42",
+    "image": "candle2.jpg"
+  },
+  {
+    "name": "Vanilla Bliss",
+    "description": "Warm and sweet",
+    "price": "$48",
+    "image": "candle3.jpg"
+  }
+]

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luxe Flame Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&family=Dancing+Script:wght@400;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family: 'Poppins', sans-serif;
+    background: linear-gradient(135deg, #fff8f0 0%, #fcf7f1 100%);
+    color: #333;
+    min-height: 100vh;
+}
+header { display:flex; justify-content:center; align-items:center; padding:20px; }
+.container { max-width: 1000px; margin: 0 auto; padding: 24px; }
+.card { background: #fff; border-radius: 24px; box-shadow: 0 15px 40px rgba(0,0,0,0.08); padding: 30px; }
+h1 { font-size: 2.4rem; margin-bottom: 10px; }
+p { margin: 12px 0; color: #555; }
+input, textarea, select { width: 100%; padding: 14px 18px; margin: 8px 0 18px; border: 1px solid rgba(255,145,77,0.25); border-radius: 16px; background: #fffaf5; }
+button { background: linear-gradient(45deg, #ff914d, #ff4d6d); color: #fff; border: none; padding: 14px 24px; border-radius: 999px; cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
+button:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(255,145,77,0.25); }
+.hidden { display:none; }
+.product-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; padding: 18px; border-radius: 18px; background: #fff6f0; border: 1px solid rgba(255,145,77,0.15); }
+.product-row label { font-weight: 600; color: #444; }
+.product-actions { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+.product-actions button { background: #ff914d; }
+textarea#productJson { min-height: 220px; font-family: monospace; white-space: pre-wrap; }
+.notice { background:#fff5e9; border-left:4px solid #ff914d; padding:14px 18px; margin:18px 0; border-radius:12px; color:#6b4a2b; }
+</style>
+</head>
+<body>
+<header>
+    <div class="container">
+        <div class="card">
+            <h1>Luxe Flame Admin</h1>
+            <p>Use this panel to edit the product catalog. After changes, download the updated JSON and replace <code>products.json</code> in the repo.</p>
+            <div id="loginSection">
+                <label for="adminPassword">Admin password</label>
+                <input id="adminPassword" type="password" placeholder="Enter admin password" autocomplete="off">
+                <button id="loginButton">Login</button>
+                <p class="notice">Default admin password: <strong>LuxeFlame123</strong></p>
+                <p id="loginMessage"></p>
+            </div>
+            <div id="adminSection" class="hidden">
+                <div class="notice">This is a static editor. After editing products, click Download and commit the new <code>products.json</code> to GitHub.</div>
+                <div id="productList"></div>
+                <button id="addProduct">Add New Product</button>
+                <div class="product-actions">
+                    <button id="refreshJson">Refresh JSON</button>
+                    <button id="downloadJson">Download products.json</button>
+                </div>
+                <label for="productJson">Product data preview</label>
+                <textarea id="productJson"></textarea>
+                <p class="notice">To publish changes, replace the file in your repository with the downloaded JSON and push to GitHub Pages.</p>
+            </div>
+        </div>
+    </div>
+</header>
+<script>
+const ADMIN_PASSWORD = 'LuxeFlame123';
+const loginSection = document.getElementById('loginSection');
+const adminSection = document.getElementById('adminSection');
+const loginButton = document.getElementById('loginButton');
+const loginMessage = document.getElementById('loginMessage');
+const productList = document.getElementById('productList');
+const productJson = document.getElementById('productJson');
+const refreshJson = document.getElementById('refreshJson');
+const downloadJson = document.getElementById('downloadJson');
+const addProduct = document.getElementById('addProduct');
+let products = [];
+
+function setMessage(text, isError = false) {
+  loginMessage.textContent = text;
+  loginMessage.style.color = isError ? '#b43131' : '#2c6e49';
+}
+
+function updateJsonArea() {
+  productJson.value = JSON.stringify(products, null, 2);
+}
+
+function renderProductRows() {
+  productList.innerHTML = products.map((item, index) => `
+    <div class="product-row" data-index="${index}">
+      <div>
+        <label>Name</label>
+        <input data-field="name" value="${item.name || ''}" placeholder="Product name">
+      </div>
+      <div>
+        <label>Price</label>
+        <input data-field="price" value="${item.price || ''}" placeholder="$45">
+      </div>
+      <div>
+        <label>Description</label>
+        <input data-field="description" value="${item.description || ''}" placeholder="Short description">
+      </div>
+      <div>
+        <label>Image filename</label>
+        <input data-field="image" value="${item.image || ''}" placeholder="candle.jpg">
+      </div>
+      <div class="product-actions">
+        <button type="button" data-action="delete" data-index="${index}">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function syncFromFields() {
+  const rows = document.querySelectorAll('.product-row');
+  products = Array.from(rows).map(row => {
+    const name = row.querySelector('input[data-field="name"]').value.trim();
+    const description = row.querySelector('input[data-field="description"]').value.trim();
+    const price = row.querySelector('input[data-field="price"]').value.trim();
+    const image = row.querySelector('input[data-field="image"]').value.trim();
+    return { name, description, price, image };
+  }).filter(item => item.name && item.image);
+  updateJsonArea();
+}
+
+function loadProducts() {
+  fetch('products.json')
+    .then(response => response.json())
+    .then(data => {
+      products = data;
+      renderProductRows();
+      updateJsonArea();
+    })
+    .catch(() => {
+      products = [];
+      renderProductRows();
+      updateJsonArea();
+      setMessage('Unable to load products.json. You can still edit manually.');
+    });
+}
+
+function download(filename, text) {
+  const blob = new Blob([text], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+loginButton.addEventListener('click', () => {
+  const value = document.getElementById('adminPassword').value;
+  if (value === ADMIN_PASSWORD) {
+    loginSection.classList.add('hidden');
+    adminSection.classList.remove('hidden');
+    setMessage('');
+    loadProducts();
+  } else {
+    setMessage('Incorrect password. Try again.', true);
+  }
+});
+
+addProduct.addEventListener('click', () => {
+  products.push({ name: '', description: '', price: '', image: '' });
+  renderProductRows();
+});
+
+productList.addEventListener('input', () => {
+  syncFromFields();
+});
+
+productList.addEventListener('click', event => {
+  const button = event.target.closest('button[data-action="delete"]');
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  products.splice(index, 1);
+  renderProductRows();
+  updateJsonArea();
+});
+
+refreshJson.addEventListener('click', () => {
+  syncFromFields();
+  setMessage('Product JSON refreshed.', false);
+});
+
+downloadJson.addEventListener('click', () => {
+  syncFromFields();
+  download('products.json', productJson.value);
+});
+</script>
+</body>
+</html>
