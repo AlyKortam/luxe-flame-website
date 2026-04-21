@@ -109,11 +109,11 @@ function renderProductRows() {
         <input data-field="description" value="${item.description || ''}" placeholder="Short description">
       </div>
       <div>
-        <label>Image URL / filename</label>
-        <input data-field="image" value="${item.image || ''}" placeholder="images/candle.jpg">
+        <label>Image Path (auto-filled)</label>
+        <input data-field="image" value="${item.image || ''}" placeholder="images/candle.jpg" readonly style="background:#f5f5f5;cursor:not-allowed;opacity:0.6;">
       </div>
       <div>
-        <label>Upload image</label>
+        <label>Upload Image File</label>
         <input type="file" data-field="imageFile" accept="image/*">
         <div class="current-file">Current: ${item.image || 'none'}</div>
       </div>
@@ -239,7 +239,7 @@ async function fileToBase64(file) {
 }
 
 async function getFileSha(owner, repo, path, token, branch) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${branch}`;
   const resp = await fetch(url, {
     headers: {
       Authorization: `token ${token}`,
@@ -256,7 +256,7 @@ async function getFileSha(owner, repo, path, token, branch) {
 }
 
 async function uploadFileToGithub(owner, repo, path, contentBase64, token, branch, message, sha = null) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const body = { message, content: contentBase64, branch };
   if (sha) body.sha = sha;
   const resp = await fetch(url, {
